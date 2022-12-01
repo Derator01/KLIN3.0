@@ -1,4 +1,6 @@
-﻿namespace KLIN;
+﻿using System.Text;
+
+namespace KLIN;
 
 public sealed class Klin
 {
@@ -29,9 +31,26 @@ public sealed class Klin
     private void Init()
     {
         if (FileExists)
+        {
             CreateFile();
+            return;
+        }
+        SetFileAttributesReadable();
+        var bytes = File.ReadAllBytes(_fullPath);
+        SetFileAttributesUnReadable();
 
+        var decoded = Encoding.UTF8.GetString(bytes, 0, bytes.Length);
+        ParseFileContent(decoded);
+    }
 
+    private void SetFileAttributesReadable()
+    {
+        File.SetAttributes(_fullPath, FileAttributes.Normal);
+    }
+
+    private void SetFileAttributesUnReadable()
+    {
+        File.SetAttributes(_fullPath, FileAttributes.Hidden | FileAttributes.Encrypted | FileAttributes.ReadOnly);
     }
 
     private void ParseFileContent(string contents)
@@ -58,6 +77,26 @@ public sealed class Klin
         if (strings.Length > 0)
             foreach (var stringKeyVal in ints.Split('\r'))
                 _strings.Add(stringKeyVal.Split('=')[0], stringKeyVal.Split('=')[1]);
+    }
+
+    private void SaveToFile()
+    {
+        string toSave = "";
+
+        foreach (var keyVal in _bools)
+            toSave += $"{keyVal.Key}={keyVal.Value}\r";
+        toSave += "|";
+        foreach (var keyVal in _ints)
+            toSave += $"{keyVal.Key}={keyVal.Value}\r";
+        toSave += "|";
+        foreach (var keyVal in _floats)
+            toSave += $"{keyVal.Key}={keyVal.Value}\r";
+        toSave += "|";
+        foreach (var keyVal in _strings)
+            toSave += $"{keyVal.Key}={keyVal.Value}\r";
+        SetFileAttributesReadable();
+        File.WriteAllBytes(_fullPath, Encoding.UTF8.GetBytes(toSave));
+        SetFileAttributesUnReadable();
     }
 
     private void CreateFile()
