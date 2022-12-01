@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.4.33110.190
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KLIN3.0", "KLIN3.0.csproj", "{882877C0-4949-453E-AAAF-2B994AAC864D}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{882877C0-4949-453E-AAAF-2B994AAC864D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{882877C0-4949-453E-AAAF-2B994AAC864D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{882877C0-4949-453E-AAAF-2B994AAC864D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{882877C0-4949-453E-AAAF-2B994AAC864D}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {644E32C8-F6AF-4502-A4B8-8E1E3174E480}
+	EndGlobalSection
+EndGlobal
