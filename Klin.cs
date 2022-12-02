@@ -43,15 +43,82 @@ public sealed class Klin
         ParseFileContent(decoded);
     }
 
-    private void SetFileAttributesReadable()
+#region Get
+    public bool GetBool(string key)
     {
-        File.SetAttributes(_fullPath, FileAttributes.Normal);
+        if (_bools.TryGetValue(key, out value))
+            return value;
+        return null;
     }
 
-    private void SetFileAttributesUnReadable()
+    public int GetInt(string key)
     {
-        File.SetAttributes(_fullPath, FileAttributes.Hidden | FileAttributes.Encrypted | FileAttributes.ReadOnly);
+        if (_ints.TryGetValue(key, out value))
+            return value;
+        return null;
     }
+
+    public float GetFloat(string key)
+    {
+        if (_floats.TryGetValue(key, out value))
+            return value;
+        return null;
+    }
+
+    public string GetString(string key)
+    {
+        if (_strings.TryGetValue(key, out value))
+            return value;
+        return null;
+    }
+#endregion
+
+#region Set
+    public void SetBool(string key, bool value)
+    {
+        if(_bools.ContainsKey(key))
+        {
+            _bools[key] = value;
+            return;
+        }
+        _bools.Add(key,value);
+    }
+
+    public void SetInt(string key, int value)
+    {
+        if(_ints.ContainsKey(key))
+        {
+            _ints[key] = value;
+            return;
+        }
+        _ints.Add(key,value);
+    }
+
+    public void SetString(string key, float value)
+    {
+        if(_floats.ContainsKey(key))
+        {
+            _floats[key] = value;
+            return;
+        }
+        _floats.Add(key,value);
+    }
+
+    public void SetString(string key, string value)
+    {
+        if(_strings.ContainsKey(key))
+        {
+            _strings[key] = value;
+            return;
+        }
+        _strings.Add(key,value);
+    }
+
+    public void Set<T>(string key, T value)
+    {
+        if()
+    }
+#endregion
 
     private void ParseFileContent(string contents)
     {
@@ -104,5 +171,15 @@ public sealed class Klin
         var file = File.Create(_fullPath);
         file.Close();
         File.SetAttributes(_fullPath, FileAttributes.Hidden);
+    }
+
+    private void SetFileAttributesReadable()
+    {
+        File.SetAttributes(_fullPath, FileAttributes.Normal);
+    }
+
+    private void SetFileAttributesUnReadable()
+    {
+        File.SetAttributes(_fullPath, FileAttributes.Hidden | FileAttributes.Encrypted | FileAttributes.ReadOnly);
     }
 }
