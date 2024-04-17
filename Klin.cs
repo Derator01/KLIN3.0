@@ -10,16 +10,18 @@ public sealed class Klin
     private bool FileExists => File.Exists(_fullPath);
     private readonly string _fullPath;
     private readonly MultiDictionary _dictionary = new();
+    public bool AutoSaveEnabled;
 
     /// <summary>
     /// Creates and Initializes a Klin instance.
     /// </summary>
     /// <param name="name">Name of file with its extension</param>
-    public Klin(string name = "Config.klin", string path = "./")
+    public Klin(bool autoSave = true, string name = "Config.klin", string path = "./")
     {
         if (path[^1] != '/')
             path = (string)path.Append('/');
 
+        AutoSaveEnabled = autoSave;
         _fullPath = Path.Combine(path, name);
 
         Load();
@@ -79,7 +81,6 @@ public sealed class Klin
         }
     }
 
-
     public T Get<T>(string key)
     {
         return _dictionary.Get<T>(key);
@@ -102,10 +103,11 @@ public sealed class Klin
     public void Set<T>(string key, T value)
     {
         _dictionary.Set(key, value);
-        SaveToFile();
+        if (AutoSaveEnabled)
+            Save();
     }
 
-    private void SaveToFile()
+    public void Save()
     {
         StringBuilder toSave = new StringBuilder();
 
@@ -113,23 +115,18 @@ public sealed class Klin
 
         foreach (var kvp in dictionaryOfDictionaries)
         {
-            Type type = kvp.Key;
-            var innerDict = kvp.Value;
 
             // Serialize key-value pairs in the inner dictionary using JSON
-            string serializedData = JsonSerializer.Serialize(innerDict);
+            string serializedData = JsonSerializer.Serialize((object?)kvp.Value);
 
             // Append type name and serialized data to the output
-            toSave.AppendLine($"{type.FullName}|{serializedData}");
+            toSave.AppendLine($"{kvp.Key.FullName}|{serializedData}");
         }
 
         SetFileAttributesReadable();
         File.WriteAllText(_fullPath, toSave.ToString());
         SetFileAttributesUnReadable();
     }
-
-
-
 
     private void CreateFile()
     {
