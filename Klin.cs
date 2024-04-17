@@ -1,175 +1,140 @@
-﻿using System.Text;
+﻿using KLIN.Storage;
+using System.Reflection;
+using System.Text;
+using System.Text.Json;
 
 namespace KLIN;
 
 public sealed class Klin
 {
-    private bool FileExists { get => File.Exists(_fullPath); }
+    private bool FileExists => File.Exists(_fullPath);
     private readonly string _fullPath;
+    private readonly MultiDictionary _dictionary = new();
 
-    private readonly Dictionary<string, bool> _bools = new();
-    private readonly Dictionary<string, int> _ints = new();
-    private readonly Dictionary<string, float> _floats = new();
-    private readonly Dictionary<string, string> _strings = new();
-
+    /// <summary>
+    /// Creates and Initializes a Klin instance.
+    /// </summary>
+    /// <param name="name">Name of file with its extension</param>
     public Klin(string name = "Config.klin", string path = "./")
     {
         if (path[^1] != '/')
-            _ = path.Append('/');
+            path = (string)path.Append('/');
 
-        _fullPath = path + name;
+        _fullPath = Path.Combine(path, name);
 
-        Init();
+        Load();
     }
 
+    /// <summary>
+    /// Creates and Initializes a Klin instance.
+    /// </summary>
+    /// <param name="path">Needs to include a file name.</param>
     public Klin(string path)
     {
         _fullPath = path;
-        Init();
+        Load();
     }
 
-    private void Init()
+    private void Load()
     {
-        if (FileExists)
+        if (!FileExists)
         {
             CreateFile();
             return;
         }
+
         SetFileAttributesReadable();
-        var bytes = File.ReadAllBytes(_fullPath);
+        var contents = File.ReadAllText(_fullPath);
         SetFileAttributesUnReadable();
 
-        var decoded = Encoding.UTF8.GetString(bytes, 0, bytes.Length);
-        ParseFileContent(decoded);
+        LoadFromText(contents);
     }
 
-#region Get
-    public bool GetBool(string key)
+    private void LoadFromText(string contents)
     {
-        if (_bools.TryGetValue(key, out value))
-            return value;
-        return null;
-    }
+        // Split the contents into individual lines
+        var lines = contents.Split(new[] { "\r", "\n" }, StringSplitOptions.RemoveEmptyEntries);
 
-    public int GetInt(string key)
-    {
-        if (_ints.TryGetValue(key, out value))
-            return value;
-        return null;
-    }
-
-    public float GetFloat(string key)
-    {
-        if (_floats.TryGetValue(key, out value))
-            return value;
-        return null;
-    }
-
-    public string GetString(string key)
-    {
-        if (_strings.TryGetValue(key, out value))
-            return value;
-        return null;
-    }
-#endregion
-
-#region Set
-    public void SetBool(string key, bool value)
-    {
-        if(_bools.ContainsKey(key))
+        foreach (var line in lines)
         {
-            _bools[key] = value;
-            return;
+            // Split each line into type name and serialized data
+            var parts = line.Split('|');
+            if (parts.Length != 2)
+                continue;
+
+            string typeName = parts[0];
+            string serializedData = parts[1];
+
+            // Resolve the type by name
+            Type type = Type.GetType(typeName);
+            if (type == null)
+                continue;
+
+            // Deserialize the JSON data into a dictionary
+            var dictionaryType = typeof(Dictionary<,>).MakeGenericType(typeof(string), type);
+            var innerDict = JsonSerializer.Deserialize(serializedData, dictionaryType);
+
+            MethodInfo addDictionaryMethod = typeof(MultiDictionary).GetMethod("AddDictionary").MakeGenericMethod(type);
+            addDictionaryMethod.Invoke(_dictionary, [innerDict]);
         }
-        _bools.Add(key,value);
     }
 
-    public void SetInt(string key, int value)
+
+    public T Get<T>(string key)
     {
-        if(_ints.ContainsKey(key))
-        {
-            _ints[key] = value;
-            return;
-        }
-        _ints.Add(key,value);
+        return _dictionary.Get<T>(key);
     }
 
-    public void SetString(string key, float value)
+    public bool TryGet<T>(string key, out T value)
     {
-        if(_floats.ContainsKey(key))
+        try
         {
-            _floats[key] = value;
-            return;
+            value = _dictionary.Get<T>(key);
+            return true;
         }
-        _floats.Add(key,value);
-    }
-
-    public void SetString(string key, string value)
-    {
-        if(_strings.ContainsKey(key))
+        catch (Exception)
         {
-            _strings[key] = value;
-            return;
+            value = default;
+            return false;
         }
-        _strings.Add(key,value);
     }
 
     public void Set<T>(string key, T value)
     {
-        if()
-    }
-#endregion
-
-    private void ParseFileContent(string contents)
-    {
-        string[] parameters = contents.Split('|');
-
-        if (contents.Split('|').Length != 4)
-            return;
-
-        string bools = parameters[0];
-        string ints = parameters[1];
-        string floats = parameters[2];
-        string strings = parameters[3];
-
-        if (bools.Length > 0)
-            foreach (var boolKeyVal in bools.Split('\r'))
-                _bools.Add(boolKeyVal.Split('=')[0], bool.Parse(boolKeyVal.Split('=')[1]));
-        if (ints.Length > 0)
-            foreach (var intKeyVal in ints.Split('\r'))
-                _ints.Add(intKeyVal.Split('=')[0], int.Parse(intKeyVal.Split('=')[1]));
-        if (floats.Length > 0)
-            foreach (var floatKeyVal in ints.Split('\r'))
-                _floats.Add(floatKeyVal.Split('=')[0], float.Parse(floatKeyVal.Split('=')[1]));
-        if (strings.Length > 0)
-            foreach (var stringKeyVal in ints.Split('\r'))
-                _strings.Add(stringKeyVal.Split('=')[0], stringKeyVal.Split('=')[1]);
+        _dictionary.Set(key, value);
+        SaveToFile();
     }
 
     private void SaveToFile()
     {
-        string toSave = "";
+        StringBuilder toSave = new StringBuilder();
 
-        foreach (var keyVal in _bools)
-            toSave += $"{keyVal.Key}={keyVal.Value}\r";
-        toSave += "|";
-        foreach (var keyVal in _ints)
-            toSave += $"{keyVal.Key}={keyVal.Value}\r";
-        toSave += "|";
-        foreach (var keyVal in _floats)
-            toSave += $"{keyVal.Key}={keyVal.Value}\r";
-        toSave += "|";
-        foreach (var keyVal in _strings)
-            toSave += $"{keyVal.Key}={keyVal.Value}\r";
+        var dictionaryOfDictionaries = _dictionary.GetDictionary();
+
+        foreach (var kvp in dictionaryOfDictionaries)
+        {
+            Type type = kvp.Key;
+            var innerDict = kvp.Value;
+
+            // Serialize key-value pairs in the inner dictionary using JSON
+            string serializedData = JsonSerializer.Serialize(innerDict);
+
+            // Append type name and serialized data to the output
+            toSave.AppendLine($"{type.FullName}|{serializedData}");
+        }
+
         SetFileAttributesReadable();
-        File.WriteAllBytes(_fullPath, Encoding.UTF8.GetBytes(toSave));
+        File.WriteAllText(_fullPath, toSave.ToString());
         SetFileAttributesUnReadable();
     }
 
+
+
+
     private void CreateFile()
     {
-        var file = File.Create(_fullPath);
-        file.Close();
+        File.Create(_fullPath).Close();
+
         File.SetAttributes(_fullPath, FileAttributes.Hidden);
     }
 
