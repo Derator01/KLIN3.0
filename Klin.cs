@@ -1,43 +1,41 @@
-﻿using KLIN.Storage;
-using System.Reflection;
-using System.Text;
+﻿using System.Text;
 using System.Text.Json;
 
 namespace KLIN;
 
 public sealed class Klin
 {
-    private bool FileExists => File.Exists(_fullPath);
     private readonly string _fullPath;
-    private readonly MultiDictionary _dictionary = new();
-    public bool AutoSaveEnabled;
+    private readonly MultiDictionary _data = new();
+    public bool AutoSaveEnabled { get; set; }
 
     /// <summary>
-    /// Creates and Initializes a Klin instance.
+    /// Initializes a new instance of the <see cref="Klin"/> class.
     /// </summary>
-    /// <param name="name">Name of file with its extension</param>
+    /// <param name="autoSave">Whether auto-save is enabled.</param>
+    /// <param name="name">The name of the file (including extension).</param>
+    /// <param name="path">The path to the file.</param>
     public Klin(bool autoSave = true, string name = "Config.klin", string path = "./")
     {
-        if (path[^1] != '/')
-            path = (string)path.Append('/');
-
-        AutoSaveEnabled = autoSave;
+        // Use Path.Combine for safer path handling.
         _fullPath = Path.Combine(path, name);
-
-        Load();
+        AutoSaveEnabled = autoSave;
+        LoadData(); // Renamed to reflect purpose
     }
 
     /// <summary>
-    /// Creates and Initializes a Klin instance.
+    /// Initializes a new instance of the <see cref="Klin"/> class.
     /// </summary>
-    /// <param name="path">Needs to include a file name.</param>
+    /// <param name="path">The full path to the file.</param>
     public Klin(string path)
     {
         _fullPath = path;
-        Load();
+        LoadData(); // Renamed to reflect purpose.
     }
 
-    private void Load()
+    private bool FileExists => File.Exists(_fullPath);
+
+    private void LoadData() // Changed name from Load
     {
         if (!FileExists)
         {
@@ -45,103 +43,146 @@ public sealed class Klin
             return;
         }
 
-        SetFileAttributesReadable();
-        var contents = File.ReadAllText(_fullPath);
-        SetFileAttributesUnReadable();
-
-        LoadFromText(contents);
+        try
+        {
+            SetFileAttributesReadability(true);
+            string contents = File.ReadAllText(_fullPath);
+            LoadFromText(contents);
+        }
+        finally
+        {
+            SetFileAttributesReadability(false);
+        }
     }
 
     private void LoadFromText(string contents)
     {
-        // Split the contents into individual lines
-        var lines = contents.Split(new[] { "\r", "\n" }, StringSplitOptions.RemoveEmptyEntries);
+        string[] lines = contents.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.RemoveEmptyEntries);
 
-        foreach (var line in lines)
+        foreach (string line in lines)
         {
-            // Split each line into type name and serialized data
-            var parts = line.Split('|');
+            string[] parts = line.Split('|');
             if (parts.Length != 2)
-                continue;
+            {
+                continue; // Consider logging invalid lines.
+            }
 
             string typeName = parts[0];
             string serializedData = parts[1];
 
-            // Resolve the type by name
-            Type type = Type.GetType(typeName);
+            Type? type = Type.GetType(typeName);
             if (type == null)
-                continue;
+            {
+                continue; // Consider logging unknown types.
+            }
 
-            // Deserialize the JSON data into a dictionary
-            var dictionaryType = typeof(Dictionary<,>).MakeGenericType(typeof(string), type);
-            var innerDict = JsonSerializer.Deserialize(serializedData, dictionaryType);
+            try
+            {
+                // Use the non-generic form of JsonSerializer.Deserialize
+                object? innerDict = JsonSerializer.Deserialize(serializedData, typeof(Dictionary<string, object>));
 
-            MethodInfo addDictionaryMethod = typeof(MultiDictionary).GetMethod("AddDictionary").MakeGenericMethod(type);
-            addDictionaryMethod.Invoke(_dictionary, [innerDict]);
+                if (innerDict is Dictionary<string, object> dictionary)
+                {
+                    _data.AddDictionary(type, dictionary);
+                }
+                else
+                {
+                    // Log error, deserialized object was not a dictionary
+                    Console.WriteLine($"Error: Deserialized object was not a dictionary for type {typeName}");
+                }
+            }
+            catch (JsonException ex)
+            {
+                // Handle deserialization errors, possibly log them.
+                Console.WriteLine($"Error deserializing data for type {typeName}: {ex.Message}");
+            }
         }
     }
 
+    /// <summary>
+    /// Retrieves a value from the Klin data.
+    /// </summary>
+    /// <typeparam name="T">The type of the value to retrieve.</typeparam>
+    /// <param name="key">The key of the value.</param>
+    /// <returns>The value associated with the key.</returns>
+    /// <exception cref="KeyNotFoundException">Thrown if the key is not found.</exception>
     public T Get<T>(string key)
     {
-        return _dictionary.Get<T>(key);
+        return _data.Get<T>(key);
     }
 
-    public bool TryGet<T>(string key, out T value)
+    /// <summary>
+    /// Tries to retrieve a value from the Klin data.
+    /// </summary>
+    /// <typeparam name="T">The type of the value to retrieve.</typeparam>
+    /// <param name="key">The key of the value.</param>
+    /// <param name="value">When this method returns, contains the value associated with the key if the key is found; otherwise, the default value for the type of the value parameter. This parameter is passed uninitialized.</param>
+    /// <returns><c>true</c> if the key was found; otherwise, <c>false</c>.</returns>
+    public bool TryGet<T>(string key, out T? value)
     {
-        try
-        {
-            value = _dictionary.Get<T>(key);
-            return true;
-        }
-        catch (Exception)
-        {
-            value = default;
-            return false;
-        }
+        return _data.TryGet(key, out value);
     }
 
+    /// <summary>
+    /// Sets a value in the Klin data.
+    /// </summary>
+    /// <typeparam name="T">The type of the value to set.</typeparam>
+    /// <param name="key">The key of the value.</param>
+    /// <param name="value">The value to set.</param>
     public void Set<T>(string key, T value)
     {
-        _dictionary.Set(key, value);
+        _data.Set(key, value);
         if (AutoSaveEnabled)
-            Save();
+        {
+            SaveData(); // Renamed to reflect purpose
+        }
     }
 
-    public void Save()
+    /// <summary>
+    /// Saves the Klin data to the file.
+    /// </summary>
+    public void Save() // Changed to SaveData
     {
-        StringBuilder toSave = new StringBuilder();
+        SaveData();
+    }
 
-        var dictionaryOfDictionaries = _dictionary.GetDictionary();
+    private void SaveData() // Changed name from Save
+    {
+        StringBuilder stringBuilder = new();
 
-        foreach (var kvp in dictionaryOfDictionaries)
+        foreach (KeyValuePair<Type, object> kvp in _data)
         {
-
-            // Serialize key-value pairs in the inner dictionary using JSON
-            string serializedData = JsonSerializer.Serialize((object?)kvp.Value);
-
-            // Append type name and serialized data to the output
-            toSave.AppendLine($"{kvp.Key.FullName}|{serializedData}");
+            // Serialize the inner dictionary.  No need to cast to object.
+            string serializedData = JsonSerializer.Serialize(kvp.Value);
+            stringBuilder.AppendLine($"{kvp.Key.FullName}|{serializedData}");
         }
 
-        SetFileAttributesReadable();
-        File.WriteAllText(_fullPath, toSave.ToString());
-        SetFileAttributesUnReadable();
+        try
+        {
+            SetFileAttributesReadability(true);
+            File.WriteAllText(_fullPath, stringBuilder.ToString());
+        }
+        finally
+        {
+            SetFileAttributesReadability(false);
+        }
     }
 
     private void CreateFile()
     {
-        File.Create(_fullPath).Close();
-
-        File.SetAttributes(_fullPath, FileAttributes.Hidden);
+        try
+        {
+            using (File.Create(_fullPath)) { } // Use using to ensure the stream is closed.
+            SetFileAttributesReadability(true);
+        }
+        finally
+        {
+            SetFileAttributesReadability(false); // Ensure attributes are reset even if CreateFile fails.
+        }
     }
 
-    private void SetFileAttributesReadable()
+    private void SetFileAttributesReadability(bool readable)
     {
-        File.SetAttributes(_fullPath, FileAttributes.Normal);
-    }
-
-    private void SetFileAttributesUnReadable()
-    {
-        File.SetAttributes(_fullPath, FileAttributes.Hidden | FileAttributes.Encrypted | FileAttributes.ReadOnly);
+        File.SetAttributes(_fullPath, readable ? FileAttributes.Normal : (FileAttributes.Hidden | FileAttributes.Encrypted | FileAttributes.ReadOnly));
     }
 }
